@@ -5,11 +5,11 @@
 ### Challenges
 
 1. [Fallback](#01---fallback)
-2. [Fallout](#01---fallout)
+2. [Fallout](#02---fallout)
 
 ## 01 - Fallback
 
-To solve this challenge we need to calaim the contract's ownership and withdraw all its balance.
+To solve this challenge we need to claim the contract's ownership and withdraw all its balance.
 
 In order to take the `ownership`, we have **two possible ways**:
 
@@ -44,7 +44,7 @@ In old Solidity versions, to create a constructor function, we could declare a f
 
 ```
 NOTE: after trying to run the challenge test, you may get an error saying that File @openzeppelin/contracts/math/SafeMath.sol, imported from contracts/Fallout.sol, not found.
-, it is maybe because the Math library is deleted from Openzeppelin in newer versions, you can just downgrade the openzeppelin package in package.json
+, it is maybe because the Math library is deleted from Openzeppelin in newer versions, you can just downgrade the openzeppelin package in package.json to solve this issue
 ```
 
 [Test script](./test/Fallout.test.js)

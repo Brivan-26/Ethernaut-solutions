@@ -9,6 +9,7 @@
 2. [Fallout](#02---fallout)
 3. [Coinflip](#03---coin-flip)
 4. [Telephone](#04---telephone)
+5. [Token](#05---token)
 
 ## 01 - Fallback
 
@@ -115,6 +116,24 @@ function attack() external onlyOwner {
    telephone.changeOwner(owner);
 }
 ```
+
 By invoking the `attack()` function, which calls the `changeOwner()` function in `Telephone` contract, the condition `tx.origin != msg.sender` matches, and as a result the `owner` state will be updated.
 
 [Attack contract](./contracts/Telephone.sol) | [Test script](./test/Telephone.test.js)
+
+## 05 - Token
+
+To pass this challenge, we need to hack the contract by taking a large number of tokens.<br/> The contract is written under version `^0.6.0` of Solidity. After inspecting the `transfer(address _to, uint _value)` function, we can notice a possibility of having an **underflow**, and the contract didn't protect itself from that.
+
+```solidity
+function transfer(address _to, uint _value) public returns (bool) {
+   require(balances[msg.sender] - _value >= 0);
+   balances[msg.sender] -= _value;
+   balances[_to] += _value;
+   return true;
+}
+```
+We started with **20** tokens, to increase our balance, we can simply transfer **21** tokens to another address which leads to having an **underflow**, so our balance will be set to **2^32 - 1**.<br />
+If you are not familiar with underflow/overflow, [read more here](https://github.com/Brivan-26/smart-contract-security/tree/master/Arithmetic-Overflow-Underflow#smart-contract-security---arithmetic-overflow--underflow)
+
+[Test script](./test/Token.test.js)

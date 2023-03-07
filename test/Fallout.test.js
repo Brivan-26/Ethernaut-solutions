@@ -14,7 +14,7 @@ describe(CONTRACT_NAME, function () {
 
   it("Challenge Solved", async function () {
     let tx;
-    let { fallout, attacker } = loadFixture(deployLoadFixture);
+    let { fallout, attacker } = await loadFixture(deployLoadFixture);
 
     fallout = fallout.connect(attacker);
 

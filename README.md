@@ -11,6 +11,7 @@
 4. [Telephone](#04---telephone)
 5. [Token](#05---token)
 6. [Delegation](#06---delegation)
+7. [Force](#07---force)
 
 ## 01 - Fallback
 
@@ -169,3 +170,16 @@ After the transaction is mined, the ownership will be taken.
 This challenge is straightforward for the ones who know the functionality of `delegatecall`
 
 [Test script](./test/Delegation.test.js)
+
+## 07 - Force
+
+We have a Force contract that has 0 balance, To pass this challenge we need to increase its balance.
+
+For a contract to be able to receive ethers, it must have either a `payable function`, or `payable receive() function`. The given contract doesn't have any. However, it's possible to **forcefully send ether** by creating an other contract that has some ethers and defines a function that causes to its destruct using `sefldestruct`.<br/> `selfdestruct` **does not trigger a Smart Contract’s fallback function**, it removes the contract from the blockchain and **sends the remaining balance to a payable address that is passed as parametere**.<br/>
+
+```solidity
+function attack() external {
+   selfdestruct(payable(force));
+}
+```
+[Attack Contract](./contracts/Force.sol) | [Test script](./test/Force.test.js)

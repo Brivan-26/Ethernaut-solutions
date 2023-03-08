@@ -12,6 +12,7 @@
 5. [Token](#05---token)
 6. [Delegation](#06---delegation)
 7. [Force](#07---force)
+8. [Vault](#08---vault)
 
 ## 01 - Fallback
 
@@ -183,3 +184,33 @@ function attack() external {
 }
 ```
 [Attack Contract](./contracts/Force.sol) | [Test script](./test/Force.test.js)
+
+## 08 - Vault
+
+To pass this challenge we need to unlock the Vault.
+```solidity
+function unlock(bytes32 _password) public {
+   if (password == _password) {
+      locked = false;
+   }
+}
+```
+The `_password` we pass must match the private password declared
+```solidity
+bytes32 private password;
+```
+However, it is possible to read the value of `password` even if it is declared as private if we know the `EVM Storage Layout`. 
+> **NOTE**: a variable declared as private means that other contracts can not access it, but it can be read from outside the Blockchain
+
+If you don't know the attack of **Accessing Private Data**, [read more here](https://github.com/Brivan-26/smart-contract-security/tree/master/Accessing-Private-Data#smart-contract-security---accessing-private-data).
+To access the value of `password`, we can follow the following reflection:
+- The `locked` variable will be stored in the `slot 0`, so **31-bytes** are still available in `slot 0`
+- The `password`'s variable size is **32 bytes**, so it can not fit in the available space in *slot 0*, so it will be inserted in `slot 1`
+
+- After we know that the value of `password` is stored in `slot 1`, we can make a simple query to read it, example of that using **ethers.js**: 
+   ```javascript
+      const storageValue = await ethers.provider.getStorageAt(volt.address, 1)
+   ```
+After we get the value of the password, we can simply call the `unlock(bytes32 _password)` and the vault will be unlocked.
+[Test script](./test/Vault.test.js)
+

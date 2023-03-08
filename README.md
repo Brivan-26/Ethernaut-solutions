@@ -10,6 +10,7 @@
 3. [Coinflip](#03---coin-flip)
 4. [Telephone](#04---telephone)
 5. [Token](#05---token)
+6. [Delegation](#06---delegation)
 
 ## 01 - Fallback
 
@@ -137,3 +138,34 @@ We started with **20** tokens, to increase our balance, we can simply transfer *
 If you are not familiar with underflow/overflow, [read more here](https://github.com/Brivan-26/smart-contract-security/tree/master/Arithmetic-Overflow-Underflow#smart-contract-security---arithmetic-overflow--underflow)
 
 [Test script](./test/Token.test.js)
+
+## 06 - Delegation
+
+To pass this challenge, we need to take ownership of the `Delegation` contract. <br />
+
+The only interesting thing in the contract is the `fallback()` function:
+```solidity
+fallback() external {
+   (bool result,) = address(delegate).delegatecall(msg.data);
+   if (result) {
+      this;
+   }
+}
+```
+We notice that it makes a **delegatecall** to the **Delegate** contract. After inspecting the `Delegate` contract's code, the only interesting thing is the `pwn()` function:
+```solidity
+function pwn() public {
+   owner = msg.sender;
+}
+```
+It simply updates the `owner` state of the `Delegate` contract. We can exploit the `Delegation` contract easily as it is using **unsafe delegatecall**. The steps to take the ownership are:
+1. We first encode the signature of `pwn()` function
+2. We make a transaction to the `Delegation` contract in order to invoke the `fallback()` method and sending along the encoded signature as `msg.data`
+   1. The `fallback()` method will delegatecall the `Delegate` contract passing the signature of `pwn()`, in other words, it is going to call the `pwn()` function of the `Delegate` contract
+3. The `pwn()` function inside `Delegate` contract will be executed **in the context of the `Delegation` contract**, so the owner's state update `owner = msg.sender` will be in the context of the `Delegation` contract.
+
+After the transaction is mined, the ownership will be taken.
+   
+This challenge is straightforward for the ones who know the functionality of `delegatecall`
+
+[Test script](./test/Delegation.test.js)

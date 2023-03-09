@@ -13,6 +13,7 @@
 6. [Delegation](#06---delegation)
 7. [Force](#07---force)
 8. [Vault](#08---vault)
+9. [King](#09---king)
 
 ## 01 - Fallback
 
@@ -214,3 +215,24 @@ To access the value of `password`, we can follow the following reflection:
 After we get the value of the password, we can simply call the `unlock(bytes32 _password)` and the vault will be unlocked.
 [Test script](./test/Vault.test.js)
 
+## 09 - King
+
+For this challenge, we need to be the king, once and for all.
+After we take the king, someone else can take the king if either:
+- he sends an amount of ether greater than our prize
+- he is the owner of the contract
+```solidity
+receive() external payable {
+   require(msg.value >= prize || msg.sender == owner);
+   payable(king).transfer(msg.value);
+   king = msg.sender;
+   prize = msg.value;
+}
+```
+After the condition `require(msg.value >= prize || msg.sender == owner)` is verified and **before the new king is set**,we will receive our prize via the `transfer` low-level function
+```solidity
+payable(king).transfer(msg.value);
+```
+To prevent someone else to take the king, we can perform a **DOS**(Denial of Service) into the contract, by creating a contract that reverts when it receives some ether. So when `transfer` is executed, the tx will be reverted, hence the king will not be set anymore.
+
+[Attack contract](./contracts/King.sol) | [Test script](./test/King.test.js)

@@ -15,6 +15,7 @@
 8. [Vault](#08---vault)
 9. [King](#09---king)
 10. [Re-entrancy](#10---re-entrancy)
+11. [Elevator](#11---elevator)
 
 ## 01 - Fallback
 
@@ -262,3 +263,27 @@ balances[msg.sender] -= _amount;
 We can create an attacking contract that performs the **Reentrancy attack**. If you don't know the Reentrancy attack, [read more here](https://github.com/Brivan-26/smart-contract-security/tree/master/Reentrancy#smart-contract-security---reentrancy-attack)
 
 [Attack Contract](./contracts/Re-entrancy.sol) | [Test script](./test/Re-entrancy.test.js)
+
+## 11 - Elevator
+
+We must get to the elevator's top to beat this challenge.<br />
+We notice that the contract is using `typecasting`__initiating a contract which  **supposedly** implements the `isLastFloor` function defined in the `Building` interface.
+```solidity
+function goTo(uint _floor) public {
+   Building building = Building(msg.sender);
+
+   if (!building.isLastFloor(_floor)) {
+      floor = _floor;
+      top = building.isLastFloor(floor);
+   }
+}
+```
+We need to satisfy two things:
+- `building.isLastFloor(_floor)` returns **true**, to pass the if check.
+- The same `building.isLastFloor(floor)` returns **false** this time, to set the `top` value to true and beat the challenge.
+
+So, we can simply create a new contract that implements the `isLastFloot(uint)` and toggles its value to satisfy both conditions.
+
+> I don't see any security or vulnerability issue at this level, instead a simple **wrong** logic implemented in the contract
+
+[Attack Contract](./contracts/Elevator.sol) | [Test script](./test/Elevator.test.js)

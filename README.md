@@ -14,6 +14,7 @@
 7. [Force](#07---force)
 8. [Vault](#08---vault)
 9. [King](#09---king)
+10. [Re-entrancy](#10---re-entrancy)
 
 ## 01 - Fallback
 
@@ -236,3 +237,28 @@ payable(king).transfer(msg.value);
 To prevent someone else to take the king, we can perform a **DOS**(Denial of Service) into the contract, by creating a contract that reverts when it receives some ether. So when `transfer` is executed, the tx will be reverted, hence the king will not be set anymore.
 
 [Attack contract](./contracts/King.sol) | [Test script](./test/King.test.js)
+
+## 10 - Re-entrancy
+
+To solve this challenge, we need to steal all the ether stored in the Smart Contract.<br/>
+After inspecting the Smart contracts' code, we notice that it is vulnerable to the **Reentrancy attack**.
+```solidity
+function withdraw(uint _amount) public {
+   if(balances[msg.sender] >= _amount) {
+      (bool result,) = msg.sender.call{value:_amount}("");
+      if(result) {
+        _amount;
+      }
+      balances[msg.sender] -= _amount;
+   }
+  }
+```
+The balance's state is updated *after* an external call.
+```solidity
+(bool result,) = msg.sender.call{value:_amount}("");
+...
+balances[msg.sender] -= _amount;
+``` 
+We can create an attacking contract that performs the **Reentrancy attack**. If you don't know the Reentrancy attack, [read more here](https://github.com/Brivan-26/smart-contract-security/tree/master/Reentrancy#smart-contract-security---reentrancy-attack)
+
+[Attack Contract](./contracts/Re-entrancy.sol) | [Test script](./test/Re-entrancy.test.js)

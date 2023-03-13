@@ -16,6 +16,7 @@
 9. [King](#09---king)
 10. [Re-entrancy](#10---re-entrancy)
 11. [Elevator](#11---elevator)
+12. [Privacy](#12---privacy)
 
 ## 01 - Fallback
 
@@ -287,3 +288,44 @@ So, we can simply create a new contract that implements the `isLastFloot(uint)` 
 > I don't see any security or vulnerability issue at this level, instead a simple **wrong** logic implemented in the contract
 
 [Attack Contract](./contracts/Elevator.sol) | [Test script](./test/Elevator.test.js)
+
+## 12 - Privacy
+
+We need to unlock the contract to beat this challenge. <br />
+
+To unlock the smart contract(change the value of `locked` variable to `true`), we need to call the function `unlock(bytes16 _key)` and pass along the correct key.<br />
+It may seem hard to know the **correct key value** as it is declared private, but for someone who knows how smart contract states are stored in the EVM storage, the challenge will be easy to solve.
+```solidity
+bool public locked = true;
+uint256 public ID = block.timestamp;
+uint8 private flattening = 10;
+uint8 private denomination = 255;
+uint16 private awkwardness = uint16(block.timestamp);
+bytes32[3] private data;
+```
+After analyzing the size of the contract's states and their declaration order, we conclude that:
+- `locked` variable is stored in `slot 0`
+- `ID` variable is stored in `slot 1`
+- `flattening` variable is stored in `slot 2`
+- `denomination` variable is stored in `slot 2`
+- `awkwardness` variable is stored in `slot 2`
+- `data` array elements are stored in `slot 3`, `slot 4`, `slot 5`
+  
+The `unlock` function needs the third element of the `data` array which is stored in `slot 5`, **in bytes16 format**.
+```solidity
+function unlock(bytes16 _key) public {
+   require(_key == bytes16(data[2]));
+   locked = false;
+}
+```
+We can query `slot 5` to get the value of `data[2]`:
+```javascript
+const storageValue = await ethers.provider.getStorageAt(privacy.address,dataSlot);
+```
+And then, transfer it to `bytes16` format:
+```javascript
+const key = storageValue.slice(0, 34); // 32 chars + 0x
+```
+We got our key, we just need to call the `unlock` function and the challenge is solved.
+
+[Test script](./test/Privacy.test.js)

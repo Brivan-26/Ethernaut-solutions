@@ -320,7 +320,7 @@ function unlock(bytes16 _key) public {
 ```
 We can query `slot 5` to get the value of `data[2]`:
 ```javascript
-const storageValue = await ethers.provider.getStorageAt(privacy.address,dataSlot);
+const storageValue = await ethers.provider.getStorageAt(contract.address,5);
 ```
 And then, transfer it to `bytes16` format:
 ```javascript

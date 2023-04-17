@@ -19,6 +19,7 @@
 12. [Privacy](#12---privacy)
 15. [Naught Coin](#15---naught-coin)
 16. [Preservation](#16---preservation)
+17. [Recovery](#17---recovery)
     
 ## 01 - Fallback
 
@@ -442,5 +443,17 @@ contract PreservationAttack {
 To make a long story short, we only need to call the `attack` function in our `PreservationAttack`, and the ownership will be claimed.
 [Attack Contract](./contracts/Preservation.sol) | [Test script](./test/Preservation.test.js)
 
+## 17 - Recovery
 
-
+To solve this challenge, we need to steal the 0.001 ETH stored inside the first initialized `SimpleToken` contract. We notice the presence of `destroy(address payable _to)` that calls the low level function `selfdestruct`
+```solidity
+function destroy(address payable _to) public {
+   selfdestruct(_to);
+}
+```
+We can call the `destroy` function and pass our address as an argument, and the ether stored inside the contract will be transferred to us. The issue is that the smart contract address is lost, so we need somehow to get it.
+To get the smart contract's address, we just need to use `Etherscan` as we already have the address of the `Factory` contract, and we can check the `internal transactions` and get **the first `SimpleToken` contract deployed**.<br>
+After getting the contract's address, we can simply interact with the `destroy` function, an example using ethers.js:
+```js
+await contract.destroy(0x622900E44841219EcE6CD973Beae9eB79E044a47)
+```

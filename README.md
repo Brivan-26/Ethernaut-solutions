@@ -20,6 +20,7 @@
 15. [Naught Coin](#15---naught-coin)
 16. [Preservation](#16---preservation)
 17. [Recovery](#17---recovery)
+18. [MagicNumber](#18---magicnumber)
     
 ## 01 - Fallback
 
@@ -456,4 +457,63 @@ To get the smart contract's address, we just need to use `Etherscan` as we alrea
 After getting the contract's address, we can simply interact with the `destroy` function, an example using ethers.js:
 ```js
 await contract.destroy(0x622900E44841219EcE6CD973Beae9eB79E044a47)
+```
+## 18 - MagicNumber
+
+To solve this level, we need to provide the Ethernaut with a `Solver`, a contract that responds to `whatIsTheMeaningOfLife()` with the right number. **The smart contract must have at most 10 opcodes**
+The right number is obviously `42`. A straightforward approach is to write a function that returns 42:
+```solidity
+function whatIsTheMeaningOfLife() external pure returns(uint) {
+   return 42;
+}
+```
+However, if we compile this smart contract, we will have diffinetly more than 10 opcodes. *It is time to get out of the comfort zone of solidity and build our smart contract using bytecodes*.
+We need a contract that returns 42. Smart contracts run on the Ethereum Virtual Machine(EVM), the EVM understands smart contracts as bytecodes. Contract creation bytecode contains 2 different parts of code that we need to write:
+- **Create bytecode**: only executed at deployment, it tells the EVM to run the constructor to init the contract and store the remaining runtime bytecode in memory
+- **runtime bytecode**: this is what lives in the blockchain, users, and dapps interact with this bytecode. It is where we need to write the logic to return 42.
+
+We know the EVM is a stack-based machine. It contains besides the stack, the **memory** which is used and cleared after each message call, and a **storage** which is like the memory but it persists between message calls. `Opcodes` are what control the EVM and tell what to execute. Each opcode has a corresponding bytecode. The list of available bytecodes is mentioned in the [**Ethereum Yellow Paper**](https://ethereum.github.io/yellowpaper/paper.pdf)
+##### Let's start by writing the `runtime bytecode`
+We need to return `42`, returning values is handled by the `RETURN` opcode, which takes two arguments:
+- `p`: the position where the value is stored in memory
+- `s`: the size of the value to be returned
+
+This means we need first to store the value in memory before returning it. Here is the sequence of the bytescodes:
+| bytecode | Opcode   | Meaning                                                         |
+|----------|----------|-----------------------------------------------------------------|
+| 602a     | PUSH1 2a | Push 2a(42 in decimals) to the stack                            |
+| 6000     | PUSH 00  | Push 00 to the stack(this will be the memory location)          |
+| 52       | MSTORE   | mstore(0, 2a): store the value 0x2a in the memory location 0x00 |
+
+After storing the value in the memory, we can return it. The sequence of bytecodes:
+| bytecode | Opcode   | Meaning                                                |
+|----------|----------|--------------------------------------------------------|
+| 6020     | PUSH1 2a | Push 0x20(32 in decimals) to the stack                 |
+| 6000     | PUSH 00  | Push 00 to the stack(this will be the memory location) |
+| f3       | RETURN   | return the 32 bytes stored in in memory position 0     |
+
+**The sequence of bytescode is: `602a60005260206000f3`**
+
+##### The `creation bytecode`
+
+We need to replicate the `runtime code` to memory, before returning to EVM. The sequence of bytecodes:
+
+| bytecode               | Opcode                      | Meaning                                                                                                |
+|------------------------|-----------------------------|--------------------------------------------------------------------------------------------------------|
+| 69602a60005260206000f3 | PUSH10 602a60005260206000f3 | Push 10 bytes of code to the stack                                                                     |
+| 6000                   | PUSH 00                     | Push 00 to the stack(this will be the memory location)                                                 |
+| 52                     | MSTORE                      | mstore(0,0x602a60005260206000f3) // this will store the 10 bytescode  padded with 22 zeros on the left |
+| 600a                   | PUSH1 0a                    | Push 0x0a(10 in decimals) to the stack                                                                 |
+| 6016                   | PUSH1 16                    | Push 0x16(22 in decimals) to the stack                                                                 |
+| f3                     | RETURN                      | Return 10bytes stored in memory position 22       
+
+**The final sequence of bytescode is: `0x69602a60005260206000f3600052600a6016f3`**
+
+Finally we need to deploy the smart contract bytescode using a simple transaction:
+```js
+web3.eth.sendTransaction({ from: account_address,data: '0x69602a60005260206000f3600052600a6016f3' })
+```
+and pass the contract's address to the `setSolver` function of the contract challenge:
+```js
+await contract.setSolver(contract_address)
 ```

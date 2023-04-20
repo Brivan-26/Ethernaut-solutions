@@ -453,11 +453,33 @@ function destroy(address payable _to) public {
 }
 ```
 We can call the `destroy` function and pass our address as an argument, and the ether stored inside the contract will be transferred to us. The issue is that the smart contract address is lost, so we need somehow to get it.
+
+##### First approach: using Etherscan
 To get the smart contract's address, we just need to use `Etherscan` as we already have the address of the `Factory` contract, and we can check the `internal transactions` and get **the first `SimpleToken` contract deployed**.<br>
-After getting the contract's address, we can simply interact with the `destroy` function, an example using ethers.js:
+After getting the contract's address, we can simply interact with the `destroy` function after initiating an instance of the contract, an example using ethers.js:
 ```js
 await contract.destroy(0x622900E44841219EcE6CD973Beae9eB79E044a47)
 ```
+
+##### Second approach: Calculate the lost address
+**Contract addresses are deterministic** and are calculated by `keccak256(address, nonce)` where the *address* is the address of the creator(a smart contract, or EOA), and the *nonce* is the number of the contracts created by the *address* in case of smart contracts, or the number of transactions made by the *address* in case of EOA.<br />
+According to the Ethereum Yellow Paper: 
+> The address of the new account is defined as being the rightmost 160 bits of the Keccak hash of the RLP encoding of the structure containing only the sender and the account nonce.
+
+`RLP` is the primary encoding method used to serialize objects in Etherem's execution layer, its purpose is to encode arbitrarily nested arrays of binary data.
+`ethers.js` has a built in function to calculate the address of a contract:
+```js
+const nonce = 1 // nonce 1 refers to the first contract created by the Recovery contract
+const lostAddress = ethers.utils.getContractAddress({
+   from: Recovery.address,
+   nonce,
+});
+```
+Or, we can use solidity language to calculate the address from scratch:
+```sol
+address lostcontract = address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xd6), bytes1(0x94), address(<Recovery address>), bytes1(0x01))))));
+```
+`0xd6`, `0x94` refer to the RLP for 20 byte address. And `0x01` refers to the nonce 1
 ## 18 - MagicNumber
 
 To solve this level, we need to provide the Ethernaut with a `Solver`, a contract that responds to `whatIsTheMeaningOfLife()` with the right number. **The smart contract must have at most 10 opcodes**

